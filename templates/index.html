@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSTM Time Series Prediction</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 25px;
+            padding: 10px 25px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            transition: border-color 0.3s ease;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .metric-card {
+            background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .loading {
+            display: none;
+        }
+        .spinner-border {
+            color: #667eea;
+        }
+        .plot-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .plot-container img {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        .navbar {
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(10px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            color: white !important;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-chart-line me-2"></i>
+                LSTM Time Series Prediction
+            </a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="main-container">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Configuration</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="configForm">
+                                <div class="mb-3">
+                                    <label for="datasetType" class="form-label">Dataset Type</label>
+                                    <select class="form-control" id="datasetType">
+                                        <option value="stock">Stock Prices</option>
+                                        <option value="weather">Weather Data</option>
+                                        <option value="sales">Sales Data</option>
+                                        <option value="energy">Energy Consumption</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="windowSize" class="form-label">Window Size</label>
+                                    <input type="number" class="form-control" id="windowSize" value="10" min="5" max="50">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="epochs" class="form-label">Epochs</label>
+                                    <input type="number" class="form-control" id="epochs" value="50" min="10" max="200">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="units" class="form-label">LSTM Units</label>
+                                    <input type="number" class="form-control" id="units" value="50" min="25" max="200">
+                                </div>
+                            </form>
+                            
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-secondary" onclick="generateData()">
+                                    <i class="fas fa-database me-2"></i>Generate Mock Data
+                                </button>
+                                <button class="btn btn-primary" onclick="trainModel()">
+                                    <i class="fas fa-play me-2"></i>Train Model
+                                </button>
+                                <button class="btn btn-success" onclick="makePrediction()" id="predictBtn" disabled>
+                                    <i class="fas fa-crystal-ball me-2"></i>Predict Future
+                                </button>
+                            </div>
+                            
+                            <div class="loading mt-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    <span>Processing...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Results</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="alerts"></div>
+                            
+                            <div id="metricsContainer" style="display: none;">
+                                <h6 class="mb-3">Model Performance Metrics</h6>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-value" id="rmseValue">-</div>
+                                            <div class="metric-label">RMSE</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-value" id="maeValue">-</div>
+                                            <div class="metric-label">MAE</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-value" id="r2Value">-</div>
+                                            <div class="metric-label">R² Score</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-value" id="accuracyValue">-</div>
+                                            <div class="metric-label">Accuracy %</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="plotsContainer">
+                                <div id="trainingPlot" class="plot-container" style="display: none;">
+                                    <h6>Training History</h6>
+                                    <img id="trainingImg" src="" alt="Training History">
+                                </div>
+                                
+                                <div id="predictionPlot" class="plot-container" style="display: none;">
+                                    <h6>Predictions vs Actual</h6>
+                                    <img id="predictionImg" src="" alt="Predictions">
+                                </div>
+                            </div>
+                            
+                            <div id="futurePredict" style="display: none;">
+                                <h6 class="mt-4">Future Predictions</h6>
+                                <div class="mb-3">
+                                    <label for="predictionSteps" class="form-label">Steps to Predict</label>
+                                    <input type="number" class="form-control" id="predictionSteps" value="10" min="1" max="50">
+                                </div>
+                                <div id="futurePredictions"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function showAlert(message, type = 'info') {
+            const alertsContainer = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            alertsContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        function showLoading(show = true) {
+            const loading = document.querySelector('.loading');
+            loading.style.display = show ? 'block' : 'none';
+        }
+
+        async function generateData() {
+            showLoading(true);
+            try {
+                const response = await fetch('/api/generate_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('Mock datasets generated successfully!', 'success');
+                } else {
+                    showAlert('Error: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error generating data: ' + error.message, 'danger');
+            }
+            showLoading(false);
+        }
+
+        async function trainModel() {
+            showLoading(true);
+            
+            const config = {
+                dataset_type: document.getElementById('datasetType').value,
+                window_size: parseInt(document.getElementById('windowSize').value),
+                epochs: parseInt(document.getElementById('epochs').value),
+                units: parseInt(document.getElementById('units').value)
+            };
+            
+            try {
+                const response = await fetch('/api/train', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(`Model trained successfully in ${result.epochs_trained} epochs!`, 'success');
+                    
+                    // Update metrics
+                    document.getElementById('rmseValue').textContent = result.metrics.rmse.toFixed(4);
+                    document.getElementById('maeValue').textContent = result.metrics.mae.toFixed(4);
+                    document.getElementById('r2Value').textContent = result.metrics.r2.toFixed(4);
+                    document.getElementById('accuracyValue').textContent = result.metrics.accuracy.toFixed(2) + '%';
+                    document.getElementById('metricsContainer').style.display = 'block';
+                    
+                    // Show plots
+                    document.getElementById('trainingImg').src = 'data:image/png;base64,' + result.training_plot;
+                    document.getElementById('predictionImg').src = 'data:image/png;base64,' + result.prediction_plot;
+                    document.getElementById('trainingPlot').style.display = 'block';
+                    document.getElementById('predictionPlot').style.display = 'block';
+                    
+                    // Enable prediction button
+                    document.getElementById('predictBtn').disabled = false;
+                    document.getElementById('futurePredict').style.display = 'block';
+                    
+                } else {
+                    showAlert('Training failed: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error training model: ' + error.message, 'danger');
+            }
+            showLoading(false);
+        }
+
+        async function makePrediction() {
+            const steps = parseInt(document.getElementById('predictionSteps').value);
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({steps: steps})
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(`Generated ${steps} future predictions!`, 'success');
+                    
+                    // Display predictions
+                    const predictionsDiv = document.getElementById('futurePredictions');
+                    let html = '<div class="row">';
+                    
+                    result.predictions.forEach((pred, index) => {
+                        html += `
+                            <div class="col-md-2 mb-2">
+                                <div class="metric-card">
+                                    <div class="metric-value" style="font-size: 1.2rem;">${pred.toFixed(2)}</div>
+                                    <div class="metric-label">Step ${index + 1}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    predictionsDiv.innerHTML = html;
+                    
+                } else {
+                    showAlert('Prediction failed: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error making prediction: ' + error.message, 'danger');
+            }
+            showLoading(false);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            showAlert('Welcome! Generate mock data first, then train your LSTM model.', 'info');
+        });
+    </script>
+</body>
+</html>
